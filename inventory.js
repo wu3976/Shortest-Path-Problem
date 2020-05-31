@@ -1,61 +1,97 @@
 const fsMod = require('fs');
-const readLineMod = require('readline');
 
+seperators = [' ', ',', '\r', '\n'];
 
-const readFromFile = (fileName) => {
-    let graph = {};
-    let inputStream = fsMod.createReadStream(fileName);
-    var data = "";
-
-    inputStream.pipe(data);
-    console.log(data);
-    let i = 0;
-    let line = "";
-    let line_arr = [];
-    while (i < data.length){
-        if (data[i] !== '.'){
-            line += data[i];
-        } else {
-            if (line.length > 0) {
-                line_arr.push(line);
-                line = "";
-            }
+const getNextToken = (datas, seperators) => {
+    let index = 0;
+    if (isSeperator(datas[0], seperators)){ // take a seperator
+        while (isSeperator(datas[index], seperators) && index < datas.length){
+            index ++;
         }
-        i++;
-    }
-    if (line.length > 0){
-        line_arr.push(line);
-        line = "";
-    }
-    for (let input of line_arr){
-        let base = "";
-        let index = 0;
-        while(!(input[index] === ',')){
-            base += input[index];
-            index++;
-        }
-        graph[base] = null;
-
-        let str = "";
-        let key = "";
-        let isEdgeLength = false;
-        for (let i = index + 1; i < input.length; i++){
-            if (input[i] !== ","){
-                str += input[i];
-            }else {
-                if (!isEdgeLength) {
-                    graph[base][str] = null;
-                    key = str;
-                    isEdgeLength = true;
-                } else {
-                    graph[base][key] = parseInt(str);
-                    isEdgeLength = false;
-                }
-                str = "";
-            }
+    } else { // take a word
+        while (!(isSeperator(datas[index], seperators)) && index < datas.length){
+            index ++;
         }
     }
-    return graph;
+    return datas.substring(0, index);
 }
 
-console.log(readFromFile("a.txt"));
+const isSeperator = (ch, seperators) => {
+    result = false;
+    for (let ele of seperators){
+        if (ele === ch) {result = true; break;}
+    }
+    return result;
+}
+
+const convert_to_graph = (datas, callback) => {
+    let graph = {};
+    while (datas.length > 0) {
+        let i = 0;
+        while (datas[i] !== '\n' && i < datas.length) {
+            i++;
+        }
+        let line = datas.substring(0, i);
+        datas = i === datas.length ? "" : datas.substring(i + 1);
+
+        // state = 0: root, state = 1 : neighbour, state = 2 : edge length
+        let machine_state = 0;
+        let root = "";
+        let neigh = '';
+        while (line.length > 0) {
+            let token = getNextToken(line, seperators);
+            line = line.substring(token.length, line.length);
+            if (isSeperator(token[0], seperators)) {
+                token = "";
+            }
+            if (machine_state === 0) {
+                if (token.length > 0) {
+                    root = token;
+                    graph[token] = {};
+                } else {
+                    machine_state = 1;
+                }
+            } else {
+                if (token.length > 0 && machine_state === 1) {
+                    neigh = token;
+                } else if (token.length > 0 && machine_state === 2) {
+                    graph[root][neigh] = parseInt(token);
+                } else {
+                    machine_state =
+                        machine_state === 1 ? machine_state + 1 : machine_state - 1;
+                }
+            }
+
+        }
+
+    }
+    callback(graph);
+}
+
+const read_data_from_csv = (path, callback) => {
+    let datas = "";
+    const inputStream = fsMod.createReadStream(path);
+    inputStream.on('data', chunk => {
+        datas += chunk;
+    })
+
+    inputStream.on('end', () => {
+        inputStream.close();
+        callback(datas);
+    });
+}
+
+const read_graph_from_csv = (path, callback) => {
+    read_data_from_csv(path, (datas) => {
+        convert_to_graph(datas, (graph) => {
+            callback(graph);
+        });
+    });
+
+}
+
+module.exports = {
+    read_graph_from_csv : read_graph_from_csv
+}
+
+
